@@ -34,7 +34,7 @@
 				<MultipleInstances>Single</MultipleInstances>
 				<Mandatory>Mandatory</Mandatory>
 				<Type>Integer</Type>
-				<RangeEnumeration></RangeEnumeration>
+				<RangeEnumeration>0-3</RangeEnumeration>
 				<Units>Defined by “Units” resource.</Units>
 				<Description>사진파일 업로드 상태정보, 0(Idle),1(Uploading),2(Uploaded),3(Awaiting)</Description>
 			</Item>

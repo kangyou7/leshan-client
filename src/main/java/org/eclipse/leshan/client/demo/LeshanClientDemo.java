@@ -18,8 +18,12 @@
 
 package org.eclipse.leshan.client.demo;
 
-import static org.eclipse.leshan.LwM2mId.*;
-import static org.eclipse.leshan.client.object.Security.*;
+import static org.eclipse.leshan.LwM2mId.SECURITY;
+import static org.eclipse.leshan.LwM2mId.SERVER;
+import static org.eclipse.leshan.client.object.Security.noSec;
+import static org.eclipse.leshan.client.object.Security.noSecBootstap;
+import static org.eclipse.leshan.client.object.Security.psk;
+import static org.eclipse.leshan.client.object.Security.pskBootstrap;
 
 import java.net.InetAddress;
 import java.net.UnknownHostException;
@@ -31,11 +35,14 @@ import org.apache.commons.cli.DefaultParser;
 import org.apache.commons.cli.HelpFormatter;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
+import org.eclipse.californium.core.CoapServer;
+import org.eclipse.californium.core.network.Endpoint;
 import org.eclipse.californium.core.network.config.NetworkConfig;
 import org.eclipse.leshan.LwM2m;
 import org.eclipse.leshan.client.californium.LeshanClient;
 import org.eclipse.leshan.client.californium.LeshanClientBuilder;
 import org.eclipse.leshan.client.object.Server;
+import org.eclipse.leshan.client.request.LwM2mRequestSender;
 import org.eclipse.leshan.client.resource.LwM2mObjectEnabler;
 import org.eclipse.leshan.client.resource.ObjectsInitializer;
 import org.eclipse.leshan.core.model.LwM2mModel;
@@ -48,222 +55,282 @@ import org.slf4j.LoggerFactory;
 
 public class LeshanClientDemo {
 
-    private static final Logger LOG = LoggerFactory.getLogger(LeshanClientDemo.class);
+	private static final Logger LOG = LoggerFactory.getLogger(LeshanClientDemo.class);
 
-    private final static String[] modelPaths = new String[] { "3303.xml" };
+	private final static String[] modelPaths = new String[] { "3303.xml", "22001.xml" };
 
-    private static final int OBJECT_ID_TEMPERATURE_SENSOR = 3303;
-    private final static String DEFAULT_ENDPOINT = "LeshanClientDemo";
-    private final static String USAGE = "java -jar leshan-client-demo.jar [OPTION]";
+	private static final int OBJECT_ID_PICTURE = 22001;
+	private static final int OBJECT_ID_TEMPERATURE_SENSOR = 3303;
+	private final static String DEFAULT_ENDPOINT = "LeshanClientDemo";
+	private final static String USAGE = "java -jar leshan-client-demo.jar [OPTION]";
 
-    private static MyLocation locationInstance;
+	static LwM2mRequestSender sender;
 
-    public static void main(final String[] args) {
+	private static final String SEND_TARGET_LOCATION = "t";
+	private static final String SEND_FILE = "f";
+	private static final String SEND_STATE_1 = "1";
+	private static final String SEND_STATE_2 = "2";
+	private static final String SEND_STATE_3 = "3";
 
-        // Define options for command line tools
-        Options options = new Options();
+	// private static MyLocation locationInstance;
 
-        options.addOption("h", "help", false, "Display help information.");
-        options.addOption("n", true, String.format(
-                "Set the endpoint name of the Client.\nDefault: the local hostname or '%s' if any.", DEFAULT_ENDPOINT));
-        options.addOption("b", false, "If present use bootstrap.");
-        options.addOption("lh", true, "Set the local CoAP address of the Client.\n  Default: any local address.");
-        options.addOption("lp", true,
-                "Set the local CoAP port of the Client.\n  Default: A valid port value is between 0 and 65535.");
-        options.addOption("slh", true, "Set the secure local CoAP address of the Client.\nDefault: any local address.");
-        options.addOption("slp", true,
-                "Set the secure local CoAP port of the Client.\nDefault: A valid port value is between 0 and 65535.");
-        options.addOption("u", true, String.format("Set the LWM2M or Bootstrap server URL.\nDefault: localhost:%d.",
-                LwM2m.DEFAULT_COAP_PORT));
-        options.addOption("i", true,
-                "Set the LWM2M or Bootstrap server PSK identity in ascii.\nUse none secure mode if not set.");
-        options.addOption("p", true,
-                "Set the LWM2M or Bootstrap server Pre-Shared-Key in hexa.\nUse none secure mode if not set.");
-        options.addOption("pos", true,
-                "Set the initial location (latitude, longitude) of the device to be reported by the Location object. Format: lat_float:long_float");
-        options.addOption("sf", true, "Scale factor to apply when shifting position. Default is 1.0.");
-        HelpFormatter formatter = new HelpFormatter();
-        formatter.setOptionComparator(null);
+	public static void main(final String[] args) {
 
-        // Parse arguments
-        CommandLine cl;
-        try {
-            cl = new DefaultParser().parse(options, args);
-        } catch (ParseException e) {
-            System.err.println("Parsing failed.  Reason: " + e.getMessage());
-            formatter.printHelp(USAGE, options);
-            return;
-        }
+		// Define options for command line tools
+		Options options = new Options();
 
-        // Print help
-        if (cl.hasOption("help")) {
-            formatter.printHelp(USAGE, options);
-            return;
-        }
+		options.addOption("h", "help", false, "Display help information.");
+		options.addOption("n", true, String.format(
+				"Set the endpoint name of the Client.\nDefault: the local hostname or '%s' if any.", DEFAULT_ENDPOINT));
+		options.addOption("b", false, "If present use bootstrap.");
+		options.addOption("lh", true, "Set the local CoAP address of the Client.\n  Default: any local address.");
+		options.addOption("lp", true,
+				"Set the local CoAP port of the Client.\n  Default: A valid port value is between 0 and 65535.");
+		options.addOption("slh", true, "Set the secure local CoAP address of the Client.\nDefault: any local address.");
+		options.addOption("slp", true,
+				"Set the secure local CoAP port of the Client.\nDefault: A valid port value is between 0 and 65535.");
+		options.addOption("u", true, String.format("Set the LWM2M or Bootstrap server URL.\nDefault: localhost:%d.",
+				LwM2m.DEFAULT_COAP_PORT));
+		options.addOption("i", true,
+				"Set the LWM2M or Bootstrap server PSK identity in ascii.\nUse none secure mode if not set.");
+		options.addOption("p", true,
+				"Set the LWM2M or Bootstrap server Pre-Shared-Key in hexa.\nUse none secure mode if not set.");
+		options.addOption("pos", true,
+				"Set the initial location (latitude, longitude) of the device to be reported by the Location object. Format: lat_float:long_float");
+		options.addOption("sf", true, "Scale factor to apply when shifting position. Default is 1.0.");
+		HelpFormatter formatter = new HelpFormatter();
+		formatter.setOptionComparator(null);
 
-        // Abort if unexpected options
-        if (cl.getArgs().length > 0) {
-            System.err.println("Unexpected option or arguments : " + cl.getArgList());
-            formatter.printHelp(USAGE, options);
-            return;
-        }
+		// Parse arguments
+		CommandLine cl;
+		try {
+			cl = new DefaultParser().parse(options, args);
+		} catch (ParseException e) {
+			System.err.println("Parsing failed.  Reason: " + e.getMessage());
+			formatter.printHelp(USAGE, options);
+			return;
+		}
 
-        // Abort if we have not identity and key for psk.
-        if ((cl.hasOption("i") && !cl.hasOption("p")) || !cl.hasOption("i") && cl.hasOption("p")) {
-            System.err.println("You should precise identity and Pre-Shared-Key if you want to connect in PSK");
-            formatter.printHelp(USAGE, options);
-            return;
-        }
+		// Print help
+		if (cl.hasOption("help")) {
+			formatter.printHelp(USAGE, options);
+			return;
+		}
 
-        // Get endpoint name
-        String endpoint;
-        if (cl.hasOption("n")) {
-            endpoint = cl.getOptionValue("n");
-        } else {
-            try {
-                endpoint = InetAddress.getLocalHost().getHostName();
-            } catch (UnknownHostException e) {
-                endpoint = DEFAULT_ENDPOINT;
-            }
-        }
+		// Abort if unexpected options
+		if (cl.getArgs().length > 0) {
+			System.err.println("Unexpected option or arguments : " + cl.getArgList());
+			formatter.printHelp(USAGE, options);
+			return;
+		}
 
-        // Get server URI
-        String serverURI;
-        if (cl.hasOption("u")) {
-            if (cl.hasOption("i"))
-                serverURI = "coaps://" + cl.getOptionValue("u");
-            else
-                serverURI = "coap://" + cl.getOptionValue("u");
-        } else {
-            if (cl.hasOption("i"))
-                serverURI = "coaps://localhost:" + LwM2m.DEFAULT_COAP_SECURE_PORT;
-            else
-                serverURI = "coap://localhost:" + LwM2m.DEFAULT_COAP_PORT;
-        }
+		// Abort if we have not identity and key for psk.
+		if ((cl.hasOption("i") && !cl.hasOption("p")) || !cl.hasOption("i") && cl.hasOption("p")) {
+			System.err.println("You should precise identity and Pre-Shared-Key if you want to connect in PSK");
+			formatter.printHelp(USAGE, options);
+			return;
+		}
 
-        // get security info
-        byte[] pskIdentity = null;
-        byte[] pskKey = null;
-        if (cl.hasOption("i") && cl.hasOption("p")) {
-            pskIdentity = cl.getOptionValue("i").getBytes();
-            pskKey = Hex.decodeHex(cl.getOptionValue("p").toCharArray());
-        }
+		// Get endpoint name
+		String endpoint;
+		if (cl.hasOption("n")) {
+			endpoint = cl.getOptionValue("n");
+		} else {
+			try {
+				endpoint = InetAddress.getLocalHost().getHostName();
+			} catch (UnknownHostException e) {
+				endpoint = DEFAULT_ENDPOINT;
+			}
+		}
 
-        // get local address
-        String localAddress = null;
-        int localPort = 0;
-        if (cl.hasOption("lh")) {
-            localAddress = cl.getOptionValue("lh");
-        }
-        if (cl.hasOption("lp")) {
-            localPort = Integer.parseInt(cl.getOptionValue("lp"));
-        }
+		// Get server URI
+		String serverURI;
+		if (cl.hasOption("u")) {
+			if (cl.hasOption("i"))
+				serverURI = "coaps://" + cl.getOptionValue("u");
+			else
+				serverURI = "coap://" + cl.getOptionValue("u");
+		} else {
+			if (cl.hasOption("i"))
+				serverURI = "coaps://localhost:" + LwM2m.DEFAULT_COAP_SECURE_PORT;
+			else
+				serverURI = "coap://localhost:" + LwM2m.DEFAULT_COAP_PORT;
+		}
 
-        // get secure local address
-        String secureLocalAddress = null;
-        int secureLocalPort = 0;
-        if (cl.hasOption("slh")) {
-            secureLocalAddress = cl.getOptionValue("slh");
-        }
-        if (cl.hasOption("slp")) {
-            secureLocalPort = Integer.parseInt(cl.getOptionValue("slp"));
-        }
+		// get security info
+		byte[] pskIdentity = null;
+		byte[] pskKey = null;
+		if (cl.hasOption("i") && cl.hasOption("p")) {
+			pskIdentity = cl.getOptionValue("i").getBytes();
+			pskKey = Hex.decodeHex(cl.getOptionValue("p").toCharArray());
+		}
 
-        Float latitude = null;
-        Float longitude = null;
-        Float scaleFactor = 1.0f;
-        // get initial Location
-        if (cl.hasOption("pos")) {
-            try {
-                String pos = cl.getOptionValue("pos");
-                int colon = pos.indexOf(':');
-                if (colon == -1 || colon == 0 || colon == pos.length() - 1) {
-                    System.err.println("Position must be a set of two floats separated by a colon, e.g. 48.131:11.459");
-                    formatter.printHelp(USAGE, options);
-                    return;
-                }
-                latitude = Float.valueOf(pos.substring(0, colon));
-                longitude = Float.valueOf(pos.substring(colon + 1));
-            } catch (NumberFormatException e) {
-                System.err.println("Position must be a set of two floats separated by a colon, e.g. 48.131:11.459");
-                formatter.printHelp(USAGE, options);
-                return;
-            }
-        }
-        if (cl.hasOption("sf")) {
-            try {
-                scaleFactor = Float.valueOf(cl.getOptionValue("sf"));
-            } catch (NumberFormatException e) {
-                System.err.println("Scale factor must be a float, e.g. 1.0 or 0.01");
-                formatter.printHelp(USAGE, options);
-                return;
-            }
-        }
+		// get local address
+		String localAddress = null;
+		int localPort = 0;
+		if (cl.hasOption("lh")) {
+			localAddress = cl.getOptionValue("lh");
+		}
+		if (cl.hasOption("lp")) {
+			localPort = Integer.parseInt(cl.getOptionValue("lp"));
+		}
 
-        createAndStartClient(endpoint, localAddress, localPort, secureLocalAddress, secureLocalPort, cl.hasOption("b"),
-                serverURI, pskIdentity, pskKey, latitude, longitude, scaleFactor);
-    }
+		// get secure local address
+		String secureLocalAddress = null;
+		int secureLocalPort = 0;
+		if (cl.hasOption("slh")) {
+			secureLocalAddress = cl.getOptionValue("slh");
+		}
+		if (cl.hasOption("slp")) {
+			secureLocalPort = Integer.parseInt(cl.getOptionValue("slp"));
+		}
 
-    public static void createAndStartClient(String endpoint, String localAddress, int localPort,
-            String secureLocalAddress, int secureLocalPort, boolean needBootstrap, String serverURI, byte[] pskIdentity,
-            byte[] pskKey, Float latitude, Float longitude, float scaleFactor) {
+		Float latitude = null;
+		Float longitude = null;
+		Float scaleFactor = 1.0f;
+		// get initial Location
+		if (cl.hasOption("pos")) {
+			try {
+				String pos = cl.getOptionValue("pos");
+				int colon = pos.indexOf(':');
+				if (colon == -1 || colon == 0 || colon == pos.length() - 1) {
+					System.err.println("Position must be a set of two floats separated by a colon, e.g. 48.131:11.459");
+					formatter.printHelp(USAGE, options);
+					return;
+				}
+				latitude = Float.valueOf(pos.substring(0, colon));
+				longitude = Float.valueOf(pos.substring(colon + 1));
+			} catch (NumberFormatException e) {
+				System.err.println("Position must be a set of two floats separated by a colon, e.g. 48.131:11.459");
+				formatter.printHelp(USAGE, options);
+				return;
+			}
+		}
+		if (cl.hasOption("sf")) {
+			try {
+				scaleFactor = Float.valueOf(cl.getOptionValue("sf"));
+			} catch (NumberFormatException e) {
+				System.err.println("Scale factor must be a float, e.g. 1.0 or 0.01");
+				formatter.printHelp(USAGE, options);
+				return;
+			}
+		}
 
-        locationInstance = new MyLocation(latitude, longitude, scaleFactor);
+		createAndStartClient(endpoint, localAddress, localPort, secureLocalAddress, secureLocalPort, cl.hasOption("b"),
+				serverURI, pskIdentity, pskKey, latitude, longitude, scaleFactor);
+	}
 
-        // Initialize model
-        List<ObjectModel> models = ObjectLoader.loadDefault();
-        models.addAll(ObjectLoader.loadDdfResources("/models", modelPaths));
+	public static void createAndStartClient(String endpoint, String localAddress, int localPort,
+			String secureLocalAddress, int secureLocalPort, boolean needBootstrap, String serverURI, byte[] pskIdentity,
+			byte[] pskKey, Float latitude, Float longitude, float scaleFactor) {
 
-        // Initialize object list
-        ObjectsInitializer initializer = new ObjectsInitializer(new LwM2mModel(models));
-        if (needBootstrap) {
-            if (pskIdentity == null)
-                initializer.setInstancesForObject(SECURITY, noSecBootstap(serverURI));
-            else
-                initializer.setInstancesForObject(SECURITY, pskBootstrap(serverURI, pskIdentity, pskKey));
-        } else {
-            if (pskIdentity == null) {
-                initializer.setInstancesForObject(SECURITY, noSec(serverURI, 123));
-                initializer.setInstancesForObject(SERVER, new Server(123, 30, BindingMode.U, false));
-            } else {
-                initializer.setInstancesForObject(SECURITY, psk(serverURI, 123, pskIdentity, pskKey));
-                initializer.setInstancesForObject(SERVER, new Server(123, 30, BindingMode.U, false));
-            }
-        }
-        initializer.setClassForObject(DEVICE, MyDevice.class);
-        initializer.setInstancesForObject(LOCATION, locationInstance);
-        initializer.setInstancesForObject(OBJECT_ID_TEMPERATURE_SENSOR, new RandomTemperatureSensor());
-        List<LwM2mObjectEnabler> enablers = initializer.create(SECURITY, SERVER, DEVICE, LOCATION,
-                OBJECT_ID_TEMPERATURE_SENSOR);
+		// locationInstance = new MyLocation(latitude, longitude, scaleFactor);
 
-        // Create client
-        LeshanClientBuilder builder = new LeshanClientBuilder(endpoint);
-        builder.setLocalAddress(localAddress, localPort);
-        builder.setLocalSecureAddress(secureLocalAddress, secureLocalPort);
-        builder.setObjects(enablers);
-        builder.setNetworkConfig(NetworkConfig.getStandard());
-        final LeshanClient client = builder.build();
+		// Initialize model
+		List<ObjectModel> models = ObjectLoader.loadDefault();
+		models.addAll(ObjectLoader.loadDdfResources("/models", modelPaths));
 
-        LOG.info("Press 'w','a','s','d' to change reported Location ({},{}).", locationInstance.getLatitude(),
-                locationInstance.getLongitude());
+		LOG.info("===============================================");
+		for (ObjectModel obj : models) {
+			LOG.info(obj.toString());
+		}
+		LOG.info("===============================================");
 
-        // Start the client
-        client.start();
+		// Initialize object list
+		ObjectsInitializer initializer = new ObjectsInitializer(new LwM2mModel(models));
+		if (needBootstrap) {
+			if (pskIdentity == null)
+				initializer.setInstancesForObject(SECURITY, noSecBootstap(serverURI));
+			else
+				initializer.setInstancesForObject(SECURITY, pskBootstrap(serverURI, pskIdentity, pskKey));
+		} else {
+			if (pskIdentity == null) {
+				initializer.setInstancesForObject(SECURITY, noSec(serverURI, 123));
+				initializer.setInstancesForObject(SERVER, new Server(123, 120, BindingMode.U, false));
+			} else {
+				initializer.setInstancesForObject(SECURITY, psk(serverURI, 123, pskIdentity, pskKey));
+				initializer.setInstancesForObject(SERVER, new Server(123, 120, BindingMode.U, false));
+			}
+		}
+		// initializer.setClassForObject(DEVICE, MyDevice.class);
+		// initializer.setInstancesForObject(LOCATION, locationInstance);
+		initializer.setInstancesForObject(OBJECT_ID_PICTURE, new MyPicture());
+		// initializer.setInstancesForObject(OBJECT_ID_TEMPERATURE_SENSOR, new
+		// RandomTemperatureSensor());
+		// List<LwM2mObjectEnabler> enablers = initializer.create(SECURITY,
+		// SERVER, DEVICE, LOCATION, OBJECT_ID_PICTURE,
+		// OBJECT_ID_TEMPERATURE_SENSOR);
+		List<LwM2mObjectEnabler> enablers = initializer.create(SECURITY, SERVER, OBJECT_ID_PICTURE);
 
-        // De-register on shutdown and stop client.
-        Runtime.getRuntime().addShutdownHook(new Thread() {
-            @Override
-            public void run() {
-                client.destroy(true); // send de-registration request before destroy
-            }
-        });
+		// Create client
+		LeshanClientBuilder builder = new LeshanClientBuilder(endpoint);
+		builder.setLocalAddress(localAddress, localPort);
+		builder.setLocalSecureAddress(secureLocalAddress, secureLocalPort);
+		builder.setObjects(enablers);
+		builder.setNetworkConfig(NetworkConfig.getStandard());
+		final LeshanClient client = builder.build();
 
-        // Change the location through the Console
-        try (Scanner scanner = new Scanner(System.in)) {
-            while (scanner.hasNext()) {
-                String nextMove = scanner.next();
-                locationInstance.moveLocation(nextMove);
-            }
-        }
-    }
+		// LOG.info("Press 'w','a','s','d' to change reported Location
+		// ({},{}).", locationInstance.getLatitude(),
+		// locationInstance.getLongitude());
+
+		// Start the client
+		client.start();
+		
+		// De-register on shutdown and stop client.
+		Runtime.getRuntime().addShutdownHook(new Thread() {
+			@Override
+			public void run() {
+				client.destroy(true); // send de-registration request before
+										// destroy
+			}
+		});
+
+		// Change the location through the Console
+		try (Scanner scanner = new Scanner(System.in)) {
+			while (scanner.hasNext()) {
+				String nextOperation = scanner.next();
+				nextOperate(nextOperation);
+			}
+		}
+	}
+
+	private static void nextOperate(String nextOperation) {
+		LOG.info("scanner=" + nextOperation);
+
+		FileUploader fileUploader = new FileUploader();
+
+		switch (nextOperation) {
+		case SEND_TARGET_LOCATION:
+			LOG.info("This opertaion is simulation of sending Target Location.");
+			fileUploader.sendTargetLocation();
+			break;
+
+		case SEND_STATE_1:
+			LOG.info("This opertaion is simulation of Uploading state  at 1.");
+			fileUploader.sendUploadState(Integer.valueOf(SEND_STATE_1));
+
+			break;
+
+		case SEND_STATE_2:
+			LOG.info("This opertaion is simulation of Uploaded state at 2.");
+			fileUploader.sendUploadState(Integer.valueOf(SEND_STATE_2));
+			break;
+
+		case SEND_STATE_3:
+			LOG.info("This opertaion is simulation of Awaiting state at 3.");
+			fileUploader.sendUploadState(Integer.valueOf(SEND_STATE_3));
+			break;
+
+		case SEND_FILE:
+			LOG.info("This opertaion is simulation of blockwise transfer.");
+			fileUploader.sendUploadFile();
+			break;
+
+		default:
+			LOG.info("please, type valid operation.");
+			break;
+		}
+
+	}
 }
