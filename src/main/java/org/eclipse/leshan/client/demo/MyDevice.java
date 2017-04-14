@@ -31,7 +31,7 @@ public class MyDevice extends BaseInstanceEnabler {
         timer.schedule(new TimerTask() {
             @Override
             public void run() {
-                fireResourcesChange(13);
+                fireResourcesChange(9);
             }
         }, 5000, 5000);
     }

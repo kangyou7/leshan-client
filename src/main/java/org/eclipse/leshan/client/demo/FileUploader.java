@@ -2,7 +2,6 @@ package org.eclipse.leshan.client.demo;
 
 import java.io.IOException;
 import java.net.InetAddress;
-import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
 
 import org.eclipse.californium.core.coap.CoAP.Code;
@@ -19,9 +18,9 @@ public class FileUploader implements UploadOperation {
 	Request coapRequest;
 	CoapEndpoint coapEndpoint;
 
-	FileUploader() {
+	FileUploader(CoapEndpoint coapEndpoint) {
 		this.coapRequest = new Request(Code.PUT);
-		this.coapEndpoint = new CoapEndpoint(new InetSocketAddress(0));
+		this.coapEndpoint = coapEndpoint;
 	}
 
 	@Override
@@ -45,11 +44,6 @@ public class FileUploader implements UploadOperation {
 		LOG.info("PayLoad=" + coapRequest.getPayloadString());
 
 		// send request
-		try {
-			coapEndpoint.start();
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
 		coapEndpoint.sendRequest(coapRequest);
 
 		// check response
@@ -65,14 +59,13 @@ public class FileUploader implements UploadOperation {
 		LOG.info("Response Code =" + response.getCode() + " " + response.getCode().name());
 		LOG.info("Target Location =" + response.getPayloadString());
 		LOG.info("===================================================");
-		coapEndpoint.stop();
 	}
 
 	@Override
 	public void sendUploadFile() {
-		
+
 		byte[] payload = "This is test".getBytes();
-		
+
 		try {
 			coapRequest.setDestination(InetAddress.getByName("127.0.0.1"));
 		} catch (UnknownHostException e) {
@@ -90,12 +83,6 @@ public class FileUploader implements UploadOperation {
 		LOG.info("URI=" + coapRequest.getURI());
 		LOG.info("PayLoad=" + coapRequest.getPayloadString());
 
-		// send request
-		try {
-			coapEndpoint.start();
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
 		coapEndpoint.sendRequest(coapRequest);
 
 		// check response
@@ -110,7 +97,6 @@ public class FileUploader implements UploadOperation {
 		LOG.info("===================================================");
 		LOG.info("Response Code =" + response.getCode() + " " + response.getCode().name());
 		LOG.info("===================================================");
-		coapEndpoint.stop();
 	}
 
 	@Override
@@ -133,12 +119,6 @@ public class FileUploader implements UploadOperation {
 		LOG.info("URI=" + coapRequest.getURI());
 		LOG.info("PayLoad=" + coapRequest.getPayloadString());
 
-		// send request
-		try {
-			coapEndpoint.start();
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
 		coapEndpoint.sendRequest(coapRequest);
 
 		// check response
@@ -153,7 +133,6 @@ public class FileUploader implements UploadOperation {
 		LOG.info("===================================================");
 		LOG.info("Response Code =" + response.getCode() + " " + response.getCode().name());
 		LOG.info("===================================================");
-		coapEndpoint.stop();
 
 	}
 }

@@ -18,6 +18,7 @@
 
 package org.eclipse.leshan.client.demo;
 
+import static org.eclipse.leshan.LwM2mId.DEVICE;
 import static org.eclipse.leshan.LwM2mId.SECURITY;
 import static org.eclipse.leshan.LwM2mId.SERVER;
 import static org.eclipse.leshan.client.object.Security.noSec;
@@ -35,14 +36,12 @@ import org.apache.commons.cli.DefaultParser;
 import org.apache.commons.cli.HelpFormatter;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
-import org.eclipse.californium.core.CoapServer;
-import org.eclipse.californium.core.network.Endpoint;
+import org.eclipse.californium.core.network.CoapEndpoint;
 import org.eclipse.californium.core.network.config.NetworkConfig;
 import org.eclipse.leshan.LwM2m;
 import org.eclipse.leshan.client.californium.LeshanClient;
 import org.eclipse.leshan.client.californium.LeshanClientBuilder;
 import org.eclipse.leshan.client.object.Server;
-import org.eclipse.leshan.client.request.LwM2mRequestSender;
 import org.eclipse.leshan.client.resource.LwM2mObjectEnabler;
 import org.eclipse.leshan.client.resource.ObjectsInitializer;
 import org.eclipse.leshan.core.model.LwM2mModel;
@@ -57,14 +56,11 @@ public class LeshanClientDemo {
 
 	private static final Logger LOG = LoggerFactory.getLogger(LeshanClientDemo.class);
 
-	private final static String[] modelPaths = new String[] { "3303.xml", "22001.xml" };
+	private final static String[] modelPaths = new String[] {"22001.xml" };
 
 	private static final int OBJECT_ID_PICTURE = 22001;
-	private static final int OBJECT_ID_TEMPERATURE_SENSOR = 3303;
 	private final static String DEFAULT_ENDPOINT = "LeshanClientDemo";
 	private final static String USAGE = "java -jar leshan-client-demo.jar [OPTION]";
-
-	static LwM2mRequestSender sender;
 
 	private static final String SEND_TARGET_LOCATION = "t";
 	private static final String SEND_FILE = "f";
@@ -230,12 +226,6 @@ public class LeshanClientDemo {
 		List<ObjectModel> models = ObjectLoader.loadDefault();
 		models.addAll(ObjectLoader.loadDdfResources("/models", modelPaths));
 
-		LOG.info("===============================================");
-		for (ObjectModel obj : models) {
-			LOG.info(obj.toString());
-		}
-		LOG.info("===============================================");
-
 		// Initialize object list
 		ObjectsInitializer initializer = new ObjectsInitializer(new LwM2mModel(models));
 		if (needBootstrap) {
@@ -252,7 +242,7 @@ public class LeshanClientDemo {
 				initializer.setInstancesForObject(SERVER, new Server(123, 120, BindingMode.U, false));
 			}
 		}
-		// initializer.setClassForObject(DEVICE, MyDevice.class);
+		initializer.setClassForObject(DEVICE, MyDevice.class);
 		// initializer.setInstancesForObject(LOCATION, locationInstance);
 		initializer.setInstancesForObject(OBJECT_ID_PICTURE, new MyPicture());
 		// initializer.setInstancesForObject(OBJECT_ID_TEMPERATURE_SENSOR, new
@@ -260,7 +250,7 @@ public class LeshanClientDemo {
 		// List<LwM2mObjectEnabler> enablers = initializer.create(SECURITY,
 		// SERVER, DEVICE, LOCATION, OBJECT_ID_PICTURE,
 		// OBJECT_ID_TEMPERATURE_SENSOR);
-		List<LwM2mObjectEnabler> enablers = initializer.create(SECURITY, SERVER, OBJECT_ID_PICTURE);
+		List<LwM2mObjectEnabler> enablers = initializer.create(SECURITY, SERVER, DEVICE, OBJECT_ID_PICTURE);
 
 		// Create client
 		LeshanClientBuilder builder = new LeshanClientBuilder(endpoint);
@@ -276,7 +266,20 @@ public class LeshanClientDemo {
 
 		// Start the client
 		client.start();
-		
+
+		CoapEndpoint secureEndpoint = (CoapEndpoint) client.getCoapServer().getEndpoint(client.getSecureAddress());
+		CoapEndpoint nonSecureEndpoint = (CoapEndpoint) client.getCoapServer()
+				.getEndpoint(client.getNonSecureAddress());
+		CoapEndpoint coapEndpoint = null;
+
+		if (pskIdentity == null) {
+			LOG.info("===========nonSecureEndpoint=============");
+			coapEndpoint = nonSecureEndpoint;
+		} else {
+			LOG.info("==============SecureEndpoint=============");
+			coapEndpoint = secureEndpoint;
+		}
+
 		// De-register on shutdown and stop client.
 		Runtime.getRuntime().addShutdownHook(new Thread() {
 			@Override
@@ -290,15 +293,15 @@ public class LeshanClientDemo {
 		try (Scanner scanner = new Scanner(System.in)) {
 			while (scanner.hasNext()) {
 				String nextOperation = scanner.next();
-				nextOperate(nextOperation);
+				nextOperate(nextOperation, coapEndpoint);
 			}
 		}
 	}
 
-	private static void nextOperate(String nextOperation) {
+	private static void nextOperate(String nextOperation, CoapEndpoint coapEndpoint) {
 		LOG.info("scanner=" + nextOperation);
 
-		FileUploader fileUploader = new FileUploader();
+		FileUploader fileUploader = new FileUploader(coapEndpoint);
 
 		switch (nextOperation) {
 		case SEND_TARGET_LOCATION:
