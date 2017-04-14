@@ -3,7 +3,6 @@ package org.eclipse.leshan.client.demo;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
-import java.net.URI;
 import java.net.UnknownHostException;
 
 import org.eclipse.californium.core.coap.CoAP.Code;
@@ -40,10 +39,10 @@ public class FileUploader implements UploadOperation {
 		coapRequest.getOptions().addUriPath("22001");
 		coapRequest.getOptions().addUriPath("0");
 		coapRequest.getOptions().addUriPath("1");
-		coapRequest.setPayload("1.2.410.200073.1.1.1.2.100.100");
-		
-		LOG.info("URI="+coapRequest.getURI());
-		LOG.info("PayLoad="+coapRequest.getPayloadString());
+		coapRequest.setPayload("1.1.1.2.200.3001");
+
+		LOG.info("URI=" + coapRequest.getURI());
+		LOG.info("PayLoad=" + coapRequest.getPayloadString());
 
 		// send request
 		try {
@@ -60,17 +59,101 @@ public class FileUploader implements UploadOperation {
 		} catch (InterruptedException e) {
 			e.printStackTrace();
 		}
-		LOG.info(response.toString());
+		LOG.info("===================================================");
+		LOG.info("Target Location response");
+		LOG.info("===================================================");
+		LOG.info("Response Code =" + response.getCode() + " " + response.getCode().name());
+		LOG.info("Target Location =" + response.getPayloadString());
+		LOG.info("===================================================");
 		coapEndpoint.stop();
 	}
 
 	@Override
 	public void sendUploadFile() {
+		
+		byte[] payload = "This is test".getBytes();
+		
+		try {
+			coapRequest.setDestination(InetAddress.getByName("127.0.0.1"));
+		} catch (UnknownHostException e) {
+			e.printStackTrace();
+		}
+		coapRequest.setDestinationPort(5683);
+		coapRequest.getOptions().setContentFormat(0);
+		coapRequest.getOptions().addUriPath("rd");
+		coapRequest.getOptions().addUriPath("1.2.410.200073.1.1.1.2.100.1");
+		coapRequest.getOptions().addUriPath("22001");
+		coapRequest.getOptions().addUriPath("0");
+		coapRequest.getOptions().addUriPath("0");
+		coapRequest.setPayload(payload);
 
+		LOG.info("URI=" + coapRequest.getURI());
+		LOG.info("PayLoad=" + coapRequest.getPayloadString());
+
+		// send request
+		try {
+			coapEndpoint.start();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+		coapEndpoint.sendRequest(coapRequest);
+
+		// check response
+		Response response = null;
+		try {
+			response = coapRequest.waitForResponse(1000);
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+		}
+		LOG.info("===================================================");
+		LOG.info("blockwise transfer response");
+		LOG.info("===================================================");
+		LOG.info("Response Code =" + response.getCode() + " " + response.getCode().name());
+		LOG.info("===================================================");
+		coapEndpoint.stop();
 	}
 
 	@Override
 	public void sendUploadState(int state) {
+
+		try {
+			coapRequest.setDestination(InetAddress.getByName("127.0.0.1"));
+		} catch (UnknownHostException e) {
+			e.printStackTrace();
+		}
+		coapRequest.setDestinationPort(5683);
+		coapRequest.getOptions().setContentFormat(0);
+		coapRequest.getOptions().addUriPath("rd");
+		coapRequest.getOptions().addUriPath("1.2.410.200073.1.1.1.2.100.1");
+		coapRequest.getOptions().addUriPath("22001");
+		coapRequest.getOptions().addUriPath("0");
+		coapRequest.getOptions().addUriPath("2");
+		coapRequest.setPayload(String.valueOf(state));
+
+		LOG.info("URI=" + coapRequest.getURI());
+		LOG.info("PayLoad=" + coapRequest.getPayloadString());
+
+		// send request
+		try {
+			coapEndpoint.start();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+		coapEndpoint.sendRequest(coapRequest);
+
+		// check response
+		Response response = null;
+		try {
+			response = coapRequest.waitForResponse(1000);
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+		}
+		LOG.info("===================================================");
+		LOG.info("Upload state response");
+		LOG.info("===================================================");
+		LOG.info("Response Code =" + response.getCode() + " " + response.getCode().name());
+		LOG.info("===================================================");
+		coapEndpoint.stop();
 
 	}
 }
